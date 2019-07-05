@@ -1,0 +1,10 @@
+// Package magic are the magic numbers
+package magic
+
+const (
+	Index   = 0x1000
+	Data    = 0x2000
+	Bigdata = 0x6000
+	Bucket  = 0x5000
+	Head    = 0x9000
+)
