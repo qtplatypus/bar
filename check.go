@@ -151,12 +151,10 @@ func (db *DB) checkBucket(node []byte) uint16 {
 	return 0
 }
 
-func addChecksumIndex(i index) index {
+func addChecksumIndex(i *index) {
 	i.checksum = crc32.ChecksumIEEE(
-		(*[indexChecksumSize]byte)(unsafe.Pointer(&i))[:],
+		(*[indexChecksumSize]byte)(unsafe.Pointer(i))[:],
 	)
-
-	return i
 }
 
 func checkChecksumIndex(i index) bool {

@@ -17,7 +17,7 @@ func (db *DB) Get(key uint32) ([]byte, error) {
 	for {
 		data, err := db.getForSnapshot(db.head.volatile, key)
 
-		if err != nil {
+		if err == nil {
 			return data, err
 		}
 
