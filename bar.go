@@ -61,12 +61,12 @@ func createDB(path string, options *Options) (*DB, error) {
 		return nil, err
 	}
 
-	db.head.highTide = page
-	db.head.lowTide  = page
-	db.head.volatile = page
-	db.head.durable  = page
-	db.head.vacuume  = page
-	db.head.vacTime  = time.Now().Unix()
+	atomic.StoreInt64(&db.head.highTide, page)
+	atomic.StoreInt64(&db.head.lowTide, page)
+	atomic.StoreInt64(&db.head.volatile, page)
+	atomic.StoreInt64(&db.head.durable, page)
+	atomic.StoreInt64(&db.head.vacuume, page)
+	atomic.StoreInt64(&db.head.vacTime, time.Now().Unix())
 
 	intialIndex := index{
 		size: uint16(unsafe.Sizeof(index{})) | magic.Head,
@@ -76,7 +76,7 @@ func createDB(path string, options *Options) (*DB, error) {
 		checksum: 0,
 	}
 
-	intialIndex = addChecksumIndex(intialIndex)
+	addChecksumIndex(&intialIndex)
 
 	newheadOffset, err := db.allocate(int64(unsafe.Sizeof(intialIndex)), true)
 	if err != nil {
@@ -97,8 +97,14 @@ func createDB(path string, options *Options) (*DB, error) {
 
 	db.head.durable = newheadOffset
 
+	fileIdent := make([]byte, 8)
+	copy(fileIdent, magic.FileIdent)
+
 	// Mark everying as ready by copying the magic string to the start
-	copy(db.head.magic[:], magic.FileIdent)
+	atomic.StoreInt64(
+		(*int64)(unsafe.Pointer(&db.head.magic)),
+		*(*int64)(unsafe.Pointer(&fileIdent[0])),
+	)
 	
 	return db, unix.Msync(db.headerBuffer, unix.MS_SYNC)
 }

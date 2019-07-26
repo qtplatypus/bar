@@ -10,7 +10,7 @@ const (
 )
 
 const (
-	FileIdent = "bardbv01"
+	FileIdent string = "bardbv01"
 )
 
 const (
