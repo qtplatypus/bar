@@ -14,9 +14,10 @@ func TestOpen(t *testing.T) {
 		},
 	)
 
-	fmt.Printf("%+v %v\n", db, err)
+	fmt.Printf("DB %+v %v\n", db, err)
 
 	err = db.Set(10, []byte("qtplatypus"),PH{})
 
-	fmt.Printf("%v\n", err)
+	fmt.Printf("\nDB %+v - %v\n", db, err)
+	fmt.Printf("\nDB %+v", db.head)
 }

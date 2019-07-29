@@ -45,21 +45,22 @@ func (db *DB) checkHead (snapshot int64) bool {
 		return false
 	}
 
-	length := index.size | ^magic.TypeMask
-	count := uint16(1)
+	length := index.size & ^magic.TypeMask
 
 	for addressLoc := indexSize; addressLoc < int(length); addressLoc += 8 {
-		count += db.checkNode(*((*int64)(unsafe.Pointer(&node[addressLoc]))))
+		if !db.checkNode(*((*int64)(unsafe.Pointer(&node[addressLoc])))) {
+			return false
+		}
 	}
 	
-	return index.count == count
+	return true
 }
 
-func (db *DB) checkNode (snapshot int64) uint16 {
+func (db *DB) checkNode (snapshot int64) bool {
 	node, nodeType, err := db.readNode(snapshot)
 
 	if err != nil {
-		return 0
+		return false
 	}
 
 	switch nodeType {
@@ -72,83 +73,70 @@ func (db *DB) checkNode (snapshot int64) uint16 {
 	case magic.Bucket:
 		return db.checkBucket(node)
 	case magic.Head:
-		return 0
+		return false
 	default:
-		return 0
+		return false
 	}
 }
 
-func (db *DB) checkIndex(node []byte) uint16 {
+func (db *DB) checkIndex(node []byte) bool {
 	index := *((*index)(unsafe.Pointer(&node[0])))
 	
 	if !checkChecksumIndex(index) {
-		return 0
+		return false
 	}
 
 	length := index.size | ^magic.TypeMask
-	count := uint16(1)
 
 	for addressLoc := indexSize; addressLoc < int(length); addressLoc += 8 {
-		count += db.checkNode(*((*int64)(unsafe.Pointer(&node[addressLoc]))))
+		if !db.checkNode(*((*int64)(unsafe.Pointer(&node[addressLoc])))) {
+			return false
+		}
 	}
 
-	if index.count == count {
-		return count
-	}
-	
-	return 0
+	return true
 }
 
-func (db *DB) checkData(node []byte) uint16 {
+func (db *DB) checkData(node []byte) bool {
+	data := *((*data)(unsafe.Pointer(&node[0])))
+
+	return checkChecksumData(data)
+}
+
+func (db *DB) checkBigdata(node []byte) bool {
 	data := *((*data)(unsafe.Pointer(&node[0])))
 
 	if !checkChecksumData(data) {
-		return 0
-	}
-	
-	return 1
-}
-
-func (db *DB) checkBigdata(node []byte) uint16 {
-	data := *((*data)(unsafe.Pointer(&node[0])))
-
-	if !checkChecksumData(data) {
-		return 0
+		return false
 	}
 
 	length := data.size | ^magic.TypeMask
-	count := uint16(1)
 
 	for addressLoc := dataSize; addressLoc < int(length); addressLoc += 8 {
-		count += db.checkNode(*((*int64)(unsafe.Pointer(&node[addressLoc]))))
+		if !db.checkNode(*((*int64)(unsafe.Pointer(&node[addressLoc])))) {
+			return false
+		}
 	}
 
-	if data.count == count {
-		return count
-	}
-	
-	return 0
+	return true
 }
 
-func (db *DB) checkBucket(node []byte) uint16 {
+func (db *DB) checkBucket(node []byte) bool {
 	bucket := *((*bucket)(unsafe.Pointer(&node[0])))
 
 	if !checkChecksumBucket(bucket) {
-		return 0
+		return false
 	}
 
 	length := bucket.size | ^magic.TypeMask
-	count := uint16(1)
 
 	for addressLoc := bucketSize; addressLoc < int(length); addressLoc += 8 {
-		count += db.checkNode(*((*int64)(unsafe.Pointer(&node[addressLoc]))))
+		if !db.checkNode(*((*int64)(unsafe.Pointer(&node[addressLoc])))) {
+			return false
+		}
 	}
 
-	if bucket.count == count {
-		return count
-	}
-
-	return 0
+	return true
 }
 
 func addChecksumIndex(i *index) {

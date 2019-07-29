@@ -81,7 +81,7 @@ func (db *DB) getForIndex(key uint32, node []byte) (int64, error) {
 		return 0, nil
 	}
 
-	indexOffset := bits.OnesCount32(index.bitmap & ^magic.AddressMask[tri])
+	indexOffset := bits.OnesCount32(index.bitmap & ^magic.AddressMask[tri]) - 1
 
 	return *((*int64)(unsafe.Pointer(&node[indexSize + indexOffset*8]))), nil
 }

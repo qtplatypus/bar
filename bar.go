@@ -178,9 +178,9 @@ func (db *DB) readNode(offset int64) ([]byte, uint16, error) {
 
 	length := *((*uint16)(unsafe.Pointer(&buffer[0])))
 
-	nodeType := length | magic.TypeMask
+	nodeType := length & magic.TypeMask
 
-	node := make([]byte, length | ^magic.TypeMask )
+	node := make([]byte, length & ^magic.TypeMask )
 	_, err = db.file.ReadAt(node, offset)
 	
 	return node, nodeType, nil

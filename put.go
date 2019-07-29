@@ -2,6 +2,7 @@
 package bar
 
 import (
+	"fmt"
 	"errors"
 	"math/bits"
 	"sync/atomic"
@@ -131,7 +132,7 @@ func (db *DB) setForNode(snapshot, currentNode int64, key uint32, dataOffset int
 	case magic.Data, magic.Bigdata:
 		return db.setForData(snapshot, currentNode, node, key, dataOffset)
 	default:
-		return 0, errors.New("internal bug")
+		return 0, fmt.Errorf("internal bug type %d not found", nodeType)
 	}
 }
 
@@ -141,18 +142,18 @@ func (db *DB) setForIndex(snapshot int64, currentNode int64, node []byte, key ui
 
 	// the key and the current index diffrent prefixes split this index
 	if 0 != (key ^ index.address) & magic.AddressMask[maskIndex] {
-		return db.splitIndex(snapshot, currentNode, index, key, dataOffset, ishead)
+		return db.splitIndex(snapshot, currentNode, index, node, key, dataOffset, ishead)
 	}
 
 	tri := (key >> (27 - maskIndex)) & ^magic.AddressMask[27]
 
 	// there is no overlapping child node.  Insert a new one
 	if 0 == index.bitmap & magic.PlaceBased[tri] {
-		return db.insertIndex(snapshot, currentNode, index, key, dataOffset, ishead)
+		return db.insertIndex(snapshot, currentNode, index, node, key, dataOffset, ishead)
 	}
 
 	// there is an overlapping child node.  Replace it.
-	return db.replaceIndex(snapshot, currentNode, index, key, dataOffset, ishead)
+	return db.replaceIndex(snapshot, currentNode, index, node, key, dataOffset, ishead)
 }
 
 func (db *DB) setForData(snapshot int64, currentNode int64, node []byte, key uint32, dataOffset int64) (int64, error) {
@@ -192,9 +193,11 @@ func (db *DB) setForData(snapshot int64, currentNode int64, node []byte, key uin
 	}) {
 
 		tri := (add.key >> uint(27 - maskIndex)) & ^magic.AddressMask[27]
-		indexOffset := 8* bits.OnesCount32(index.bitmap & ^magic.AddressMask[tri])
+		indexOffset := 8* (bits.OnesCount32(index.bitmap & ^magic.AddressMask[tri]) -1)
 		copy(buffer[indexOffset:indexOffset+8], (*(*[8]byte)(unsafe.Pointer(&add.value)))[:])
 	}
+
+	addChecksumIndex(&index)
 
 	newheadOffset, err := db.allocate(int64(len(buffer)), true)
 	if err != nil {
@@ -206,14 +209,60 @@ func (db *DB) setForData(snapshot int64, currentNode int64, node []byte, key uin
 	return newheadOffset, err
 }
 
-func (db *DB) splitIndex(snapshot int64, currentNode int64, index index, key uint32, dataOffset int64, ishead bool) (int64, error) {
-	return 0, errors.New("internal bug")
+func (db *DB) insertIndex(snapshot int64, currentNode int64, i index, node []byte, key uint32, dataOffset int64, ishead bool) (int64, error) {
+
+	newIndexSize := 8+ (i.size & ^magic.TypeMask)
+	
+	buffer := make([]byte, newIndexSize)
+	index := (*index)(unsafe.Pointer(&buffer[0]))
+
+	index.size = newIndexSize
+
+	if ishead {
+		index.size |= magic.Head
+	} else {
+		index.size |= magic.Index
+	}
+	
+	index.address = i.address
+
+	maskIndex := index.address & ^magic.AddressMask[27]
+	tri := (key >> (27 - maskIndex)) & ^magic.AddressMask[27]
+	index.bitmap = i.bitmap | magic.PlaceBased[tri]
+	
+	for k, mask := range(magic.PlaceBased) {
+		if i.bitmap & mask != 0 {
+			iOffset := bits.OnesCount32(i.bitmap & ^magic.AddressMask[k]) -1
+			indexOffset := bits.OnesCount32(index.bitmap & ^magic.AddressMask[k]) -1
+			
+			*((*int64)(unsafe.Pointer(&buffer[indexSize + indexOffset*8]))) = *((*int64)(unsafe.Pointer(&node[indexSize + iOffset*8])))
+		}
+	}
+
+	indexOffset := bits.OnesCount32(index.bitmap & ^magic.AddressMask[tri]) - 1
+	*((*int64)(unsafe.Pointer(&buffer[indexSize + indexOffset*8]))) = dataOffset
+
+	addChecksumIndex(index)
+
+	newIndexOffset, err := db.allocate(int64(newIndexSize), true)
+	if err != nil {
+		return 0, err
+	}
+
+	fmt.Printf("insert index: %v\n", buffer)
+	
+	_, err = db.file.WriteAt(
+		buffer,
+		newIndexOffset,
+	)
+
+	return newIndexOffset, err
 }
 
-func (db *DB) insertIndex(snapshot int64, currentNode int64, index index, key uint32, dataOffset int64, ishead bool) (int64, error) {
-	return 0, errors.New("internal bug")
+func (db *DB) splitIndex(snapshot int64, currentNode int64, index index, node []byte, key uint32, dataOffset int64, ishead bool) (int64, error) {
+	return 0, errors.New("internal bug split")
 }
 
-func (db *DB) replaceIndex(snapshot int64, currentNode int64, index index, key uint32, dataOffset int64, ishead bool) (int64, error) {
-	return 0, errors.New("internal bug")
+func (db *DB) replaceIndex(snapshot int64, currentNode int64, index index, node []byte, key uint32, dataOffset int64, ishead bool) (int64, error) {
+	return 0, errors.New("internal bug replace")
 }
